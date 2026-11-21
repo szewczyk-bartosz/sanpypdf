@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sanpypdf"
+dynamic = ["version"]
+description = "Sanitize PDFs by rasterizing every page"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Bartosz Szewczyk" }]
+dependencies = ["pymupdf>=1.24"]
+keywords = ["pdf", "sanitize", "security", "rasterize"]
+classifiers = [
+    "Environment :: Console",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+    "Topic :: Utilities",
+]
+
+[project.urls]
+Homepage = "https://github.com/szewczyk-bartosz/sanpypdf"
+Issues = "https://github.com/szewczyk-bartosz/sanpypdf/issues"
+
+[project.scripts]
+sanpypdf = "sanpypdf.cli:main"
+
+[tool.hatch.version]
+path = "src/sanpypdf/__init__.py"
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "README.md", "LICENSE"]
