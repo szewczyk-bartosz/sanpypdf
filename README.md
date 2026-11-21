@@ -1,33 +1,21 @@
 # sanpypdf
 
-Strips everything out of a PDF that isn't visible on the page (JavaScript,
-embedded files, forms, links, metadata, hidden text) by rendering each page to
-an image and building a new PDF from those images.
+Rasterises PDFs into images and then back into a PDF, stripping everything that isn't visible on the page. Potential use is for PDFs you don't trust, as an extra layer of security.
 
 ## Usage
 
 ```sh
-pip install sanpypdf
+pipx install sanpypdf      # or: uv tool install sanpypdf
 sanpypdf INPUT_DIR [-o OUTPUT_DIR]
 ```
 
-Every `*.pdf` under `INPUT_DIR` is processed recursively. The output keeps the
-same directory layout and goes to `INPUT_DIR/sanpy-output` unless `-o` is given.
-Re-running overwrites previous output.
+Every `.pdf` file under `INPUT_DIR` is processed, and ends up in `INPUT_DIR/sanpy-output` unless -o is given (output always preserves input directory structure).
+Re-running overwrites the previous output.
 
 ## Design
 
-**Rasterise, don't filter.** Trying to remove the dangerous parts of a PDF
-means knowing every way a PDF can be dangerous. Turning each page into a
-picture avoids that problem: nothing survives except pixels. The downside is
-that text is no longer selectable or searchable, and files may get bigger.
+**Rasterise** - Blunt tool, but it is simple, no hidden malicious bits can survive if the whole file is just a bunch of images. If you want text to be selectable, I recommend doing an OCR pass with a dedicated tool.
 
-! You can do an OCR pass afterwards if you want !
+**Chunked, incremental saves** - Pages are rendered 32 at a time and appended to the output with incremental save. Memory usage stays flat, however long the document.
 
-**Chunked, incremental saves.** Pages are rendered 32 at a time and appended
-to the output with an incremental save. Memory use stays flat however long
-the document is.
-
-**No built-in sandbox.** Parsing an untrusted PDF can only go wrong through a
-bug in MuPDF itself. If that's part of your threat model, isolate the whole
-process with bubblewrap or something similar
+**No built-in sandbox** - The only thing I can think of that may go wrong is a vulnerability in MuPDF itself. If that is part of your threat model, isolate the whole process with bubblewrap or something similar.
