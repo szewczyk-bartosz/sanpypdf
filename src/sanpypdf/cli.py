@@ -53,11 +53,10 @@ def find_pdfs(cfg):
 
 
 def get_page_count(path):
-    try:
-        with pymupdf.open(path) as doc:
-            return doc.page_count
-    except (pymupdf.FileDataError, RuntimeError) as e:
-        sys.exit(f"couldn't open {path}: {e}")
+    with pymupdf.open(path) as doc:
+        if doc.needs_pass:
+            raise ValueError("encrypted, needs a password")
+        return doc.page_count
 
 
 def chunks(count, size):
@@ -79,17 +78,22 @@ def process_file(cfg, file):
     log.info("%s (%d pages)", file.path, file.page_count)
 
     # Write the output in chunks so whole document doesnt go in memory
-    with pymupdf.open(cfg.input_dir / file.path) as src:
-        for first, last in chunks(file.page_count, CHUNK_SIZE):
-            log.info("  pages %d-%d", first, last)
-            if first == 1:
-                with pymupdf.open() as dst:
-                    add_pages(dst, src, first, last)
-                    dst.save(dst_path)
-            else:
-                with pymupdf.open(dst_path) as dst:
-                    add_pages(dst, src, first, last)
-                    dst.saveIncr()
+    try:
+        with pymupdf.open(cfg.input_dir / file.path) as src:
+            for first, last in chunks(file.page_count, CHUNK_SIZE):
+                log.info("  pages %d-%d", first, last)
+                if first == 1:
+                    with pymupdf.open() as dst:
+                        add_pages(dst, src, first, last)
+                        dst.save(dst_path)
+                else:
+                    with pymupdf.open(dst_path) as dst:
+                        add_pages(dst, src, first, last)
+                        dst.saveIncr()
+    except BaseException:
+        # don't leave a half-written file that looks like a finished one
+        dst_path.unlink(missing_ok=True)
+        raise
 
 
 def main():
@@ -98,15 +102,34 @@ def main():
     log.info("input:  %s", cfg.input_dir)
     log.info("output: %s", cfg.output_dir)
 
-    files = find_pdfs(cfg)
-    for f in files:
-        f.page_count = get_page_count(cfg.input_dir / f.path)
+    # Inputs are untrusted, so any one of them can fail in any way. Log it and
+    # move on rather than letting one bad file stop the batch.
+    failed = []
+    files = []
+    for f in find_pdfs(cfg):
+        try:
+            f.page_count = get_page_count(cfg.input_dir / f.path)
+        except Exception as e:
+            log.error("skipping %s: %s", f.path, e)
+            failed.append(f.path)
+            continue
         log.info("found %s (%d pages)", f.path, f.page_count)
+        files.append(f)
     total = sum(f.size for f in files) / 1024**2
     log.info("total size: %.2f MB", total)
 
     for f in files:
-        process_file(cfg, f)
+        try:
+            process_file(cfg, f)
+        except Exception as e:
+            log.error("failed %s: %s", f.path, e)
+            failed.append(f.path)
+
+    if failed:
+        log.error("%d file(s) failed:", len(failed))
+        for path in failed:
+            log.error("  %s", path)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
